@@ -1,0 +1,65 @@
+Sonido Vivo
+Integrantes: [Thian Pereira] - [ thi.pereira@duocuc.cl ] [Jesús Serrano] - [ jes.serrano@duocuc.cl ] [Constanza Carrasco] - [ cons.carrascoc@duocuc.cl ]
+
+Descripción del proyecto
+Backend del proyecto Sonido Vivo desarrollado con Node.js, Express y PostgreSQL (AWS RDS), documentado con Swagger.
+
+Tecnologías utilizadas
+- Node.js
+- Express
+- PostgreSQL (AWS RDS)
+- dotenv
+- cors
+- pg
+- swagger-ui-express
+- swagger-jsdoc
+
+Requisitos previos
+Para ejecutar el proyecto se necesita tener instalado Node.js y npm.
+
+Instalación
+Clonar el repositorio y entrar a la carpeta del proyecto:
+git clone https://github.com/Thian-Pereira/Backend-SonidoVivo.git
+cd Backend-SonidoVivo
+
+Instalar las dependencias:
+npm install
+
+Configuración del entorno
+Crear un archivo `.env` en la raíz del proyecto basándose en las variables necesarias:
+PORT=3000
+DB_HOST=tu_host_rds
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=tu_password
+DB_NAME=bdnodecons
+JWT_SECRET=tu_clave_secreta
+
+Ejecución del proyecto
+Iniciar el servidor en desarrollo:
+npm start
+
+Abrir en el navegador la documentación de Swagger:
+http://localhost:3000/api-docs
+
+Estado del Avance
+| Operación | Estado | Observaciones |
+| :--- | :--- | :--- |
+| Tabla de usuarios | Listo | Tabla creada en PostgreSQL (AWS RDS) con persistencia real. |
+| Inicio de sesión | En avance | En desarrollo por Thian. |
+| Registro (crear usuario) | En avance | En desarrollo por Thian. |
+| Modificar usuario | Pendiente | Pendiente de implementación. |
+| Listar usuarios | Pendiente | Pendiente de implementación. |
+| Eliminar o desactivar usuario | Pendiente | Pendiente de implementación. |
+
+Estructura del proyecto
+src/
+├── controllers/
+├── routes/
+├── app.js
+├── db.js
+└── swagger.js
+database/
+└── schema.sql
+index.js
+README.md
