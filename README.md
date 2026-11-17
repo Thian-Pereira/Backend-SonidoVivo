@@ -42,16 +42,6 @@ npm start
 Abrir en el navegador la documentación de Swagger:
 http://localhost:3000/api-docs
 
-Estado del Avance
-| Operación | Estado | Observaciones |
-| :--- | :--- | :--- |
-| Tabla de usuarios | Listo | Tabla creada en PostgreSQL (AWS RDS) con persistencia real. |
-| Inicio de sesión | En avance | En desarrollo por Thian. |
-| Registro (crear usuario) | En avance | En desarrollo por Thian. |
-| Modificar usuario | Pendiente | Pendiente de implementación. |
-| Listar usuarios | Pendiente | Pendiente de implementación. |
-| Eliminar o desactivar usuario | Pendiente | Pendiente de implementación. |
-
 Estructura del proyecto
 src/
 ├── controllers/
