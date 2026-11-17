@@ -2,7 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-process.env.JWT_SECRET = 'clave-secreta-para-pruebas';
+process.env.JWT_SECRET = 'clave-secreta-larga-para-pruebas-unitarias-2026';
 
 const {
   crearUsuario,

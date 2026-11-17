@@ -2,6 +2,14 @@
 const jwt = require('jsonwebtoken');
 
 const verificarToken = (req, res, next) => {
+  const secreto = process.env.JWT_SECRET;
+
+  if (!secreto || secreto.length < 32) {
+    return res.status(500).json({
+      error: 'Error de configuración del servidor'
+    });
+  }
+
   try {
     const authHeader = req.headers.authorization;
 
@@ -13,7 +21,15 @@ const verificarToken = (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
 
-    const usuario = jwt.verify(token, process.env.JWT_SECRET);
+    if (!token) {
+      return res.status(401).json({
+        error: 'Formato de token inválido'
+      });
+    }
+
+    const usuario = jwt.verify(token, secreto, {
+      algorithms: ['HS256']
+    });
 
     req.usuario = usuario;
 
@@ -27,3 +43,4 @@ const verificarToken = (req, res, next) => {
 };
 
 module.exports = verificarToken;
+
