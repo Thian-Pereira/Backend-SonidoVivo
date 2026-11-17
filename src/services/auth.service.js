@@ -1,5 +1,6 @@
 
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
 const generarToken = (usuario) => {
   return jwt.sign(
@@ -15,6 +16,16 @@ const generarToken = (usuario) => {
   );
 };
 
+const encriptarPassword = async (password) => {
+  return await bcrypt.hash(password, 10);
+};
+
+const compararPassword = async (password, passwordHash) => {
+  return await bcrypt.compare(password, passwordHash);
+};
+
 module.exports = {
-  generarToken
+  generarToken,
+  encriptarPassword,
+  compararPassword
 };
