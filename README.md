@@ -63,3 +63,14 @@ database/
 └── schema.sql
 index.js
 README.md
+
+## Estado de Avance - Evaluación Parcial 3 (Semana 15)
+
+| Operación | Estado | Descripción |
+| :--- | :--- | :--- |
+| **Tabla de usuarios** | Listo | Creada en PostgreSQL con roles definidos. |
+| **Inicio de sesión** | Listo | Login comprueba hash y entrega JWT. |
+| **Registro** | Listo | Guarda usuario con hash y rol asignado por servidor. |
+| **Modificar usuario** | En avance | Controlador inicial creado. |
+| **Listar usuarios** | En avance | Controlador inicial creado. |
+| **Eliminar usuario** | En avance | Controlador inicial creado. |
