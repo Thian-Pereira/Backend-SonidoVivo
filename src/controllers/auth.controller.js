@@ -3,57 +3,77 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const registrarUsuario = async (req, res) => {
-    const { nombre, email, password } = req.body;
+  const { nombre, email, correo, password } = req.body;
+  const emailFinal = (email || correo || '').trim().toLowerCase();
 
-    try {
-        // Encriptar la contraseña (Hash)
-        const salt = await bcrypt.genSalt(10);
-        const password_hash = await bcrypt.hash(password, salt);
-
-        // Guardar en la base de datos asignando el rol CLIENTE por defecto
-        const result = await pool.query(
-            "INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES ($1, $2, $3, 'CLIENTE') RETURNING id, nombre, email, rol",
-            [nombre, email, password_hash]
-        );
-
-        res.status(201).json({ mensaje: "Usuario registrado con éxito", usuario: result.rows[0] });
-    } catch (error) {
-        // Si el email ya existe, PostgreSQL arrojará un error de constraint
-        res.status(500).json({ error: "Error al registrar el usuario" });
+  try {
+    const password_hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      "INSERT INTO usuarios (nombre, email, password_hash, rol, activo) VALUES ($1, $2, $3, 'CLIENTE', TRUE) RETURNING id, nombre, email, rol, activo",
+      [nombre?.trim(), emailFinal, password_hash]
+    );
+    res.status(201).json({ mensaje: 'Usuario registrado con éxito', usuario: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ mensaje: 'El correo ya está registrado' });
     }
+    res.status(500).json({ mensaje: 'Error al registrar el usuario' });
+  }
 };
 
 const loginUsuario = async (req, res) => {
-    const { email, password } = req.body;
+  const { email, correo, password } = req.body;
+  const emailFinal = (email || correo || '').trim().toLowerCase();
 
-    try {
-        // Buscar usuario en la tabla
-        const result = await pool.query("SELECT * FROM usuarios WHERE email = $1", [email]);
-        
-        // Error genérico si no existe
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: "Credenciales incorrectas" });
-        }
-
-        const usuario = result.rows[0];
-
-        // Comprobar el hash
-        const validPassword = await bcrypt.compare(password, usuario.password_hash);
-        if (!validPassword) {
-            return res.status(401).json({ error: "Credenciales incorrectas" });
-        }
-
-        // Generar JWT
-        const token = jwt.sign(
-            { id: usuario.id, rol: usuario.rol }, 
-            process.env.JWT_SECRET || 'secreto_super_seguro_temporal', 
-            { expiresIn: '2h' }
-        );
-
-        res.json({ token, mensaje: "Inicio de sesión exitoso" });
-    } catch (error) {
-        res.status(500).json({ error: "Error interno del servidor" });
+  try {
+    const result = await pool.query(
+      'SELECT * FROM usuarios WHERE email = $1 AND activo = TRUE',
+      [emailFinal]
+    );
+    if (result.rows.length === 0) {
+      return res.status(401).json({ mensaje: 'Credenciales incorrectas' });
     }
+
+    const usuario = result.rows[0];
+    const validPassword = await bcrypt.compare(password, usuario.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ mensaje: 'Credenciales incorrectas' });
+    }
+
+    const token = jwt.sign(
+      { id: usuario.id, sub: usuario.id, email: usuario.email, correo: usuario.email, rol: usuario.rol },
+      process.env.JWT_SECRET || 'clave_secreta_sonido_vivo_2026',
+      { expiresIn: '8h' }
+    );
+
+    res.json({
+      token,
+      tipo: 'Bearer',
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        rol: usuario.rol,
+        activo: usuario.activo
+      }
+    });
+  } catch {
+    res.status(500).json({ mensaje: 'Error interno del servidor' });
+  }
 };
 
-module.exports = { registrarUsuario, loginUsuario };
+const obtenerPerfil = async (req, res) => {
+  try {
+    const id = req.usuario.id || req.usuario.sub;
+    const { rows } = await pool.query(
+      'SELECT id, nombre, email, rol, activo FROM usuarios WHERE id = $1 AND activo = TRUE',
+      [id]
+    );
+    if (rows.length === 0) return res.status(401).json({ mensaje: 'Sesión no válida' });
+    res.json({ usuario: rows[0] });
+  } catch {
+    res.status(500).json({ mensaje: 'Error al obtener perfil' });
+  }
+};
+
+module.exports = { registrarUsuario, loginUsuario, obtenerPerfil };
