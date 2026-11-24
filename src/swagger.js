@@ -10,7 +10,7 @@ const options = {
       version: '1.0.0',
       description: 'API RESTful Sonido Vivo — Auth JWT, Usuarios, Productos y Pedidos'
     },
-    servers: [{ url: 'http://localhost:8080' }],
+    servers: [{ url: '/' }],
     components: {
       securitySchemes: {
         bearerAuth: {

@@ -1,117 +1,166 @@
 const pool = require('../db');
 
+const formatearPedido = (p, productos = []) => ({
+  id: p.id,
+  numeroPedido: p.numero_pedido,
+  fecha: p.fecha,
+  usuarioEmail: p.usuario_email,
+  cliente: {
+    nombre: p.cliente_nombre,
+    apellido: '',
+    correo: p.usuario_email,
+    telefono: p.cliente_telefono
+  },
+  tipoEntrega: p.tipo_entrega,
+  direccion: p.direccion,
+  metodoPago: p.metodo_pago,
+  estadoPago: p.estado_pago,
+  subtotal: p.subtotal,
+  costoDespacho: p.costo_despacho,
+  total: p.total,
+  estado: p.estado,
+  productos
+});
+
 const crearPedido = async (req, res) => {
-    // Si aún no tienen el middleware de JWT, usa un ID fijo temporal (ej. 1) para poder probar
-    const usuario_id = req.usuario?.id || 1; 
-    const { instrumentos } = req.body; 
+  const usuarioId = req.usuario.id || req.usuario.sub;
+  const usuarioEmail = req.usuario.email || req.usuario.correo;
+  const { numeroPedido, cliente, tipoEntrega, direccion, metodoPago, productos } = req.body;
 
-    const client = await pool.connect();
+  if (!Array.isArray(productos) || productos.length === 0) {
+    return res.status(400).json({ mensaje: 'El pedido debe incluir al menos un producto' });
+  }
 
-    try {
-        await client.query('BEGIN');
-        let totalPedido = 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let subtotal = 0;
+    const detalles = [];
 
-        // 1. Validar el stock de cada instrumento (Regla de Negocio - IE3.1.1)
-        for (const item of instrumentos) {
-            const resInst = await client.query(
-                'SELECT nombre, precio, stock FROM instrumentos WHERE id = $1 FOR UPDATE',
-                [item.instrumento_id]
-            );
+    for (const item of productos) {
+      const prodId = item.id || item.productoId || item.instrumento_id;
+      const { rows } = await client.query(
+        'SELECT id, nombre, precio, stock, en_oferta, descuento FROM productos WHERE id = $1 FOR UPDATE',
+        [prodId]
+      );
+      const prod = rows[0];
+      if (!prod) throw { status: 404, message: `Producto ID ${prodId} no encontrado` };
 
-            const instrumento = resInst.rows[0];
-            if (!instrumento) {
-                throw { status: 404, message: `Instrumento ID ${item.instrumento_id} no encontrado` };
-            }
+      const cantidad = Number(item.cantidad) || 1;
+      if (prod.stock < cantidad) {
+        throw { status: 409, message: `Stock insuficiente para ${prod.nombre}` };
+      }
 
-            // Conflicto 409: Supera el stock disponible
-            if (item.cantidad > instrumento.stock) {
-                throw { 
-                    status: 409, 
-                    message: `Stock insuficiente para ${instrumento.nombre}. Solicitado: ${item.cantidad}, Disponible: ${instrumento.stock}` 
-                };
-            }
+      const precioFinal = prod.en_oferta
+        ? Math.round(prod.precio * (1 - prod.descuento / 100))
+        : prod.precio;
 
-            totalPedido += parseFloat(instrumento.precio) * item.cantidad;
-        }
+      await client.query('UPDATE productos SET stock = stock - $1 WHERE id = $2', [cantidad, prod.id]);
 
-        // 2. Insertar el Pedido principal
-        const resPedido = await client.query(
-            "INSERT INTO pedidos (usuario_id, total, estado) VALUES ($1, $2, 'PENDIENTE') RETURNING id",
-            [usuario_id, totalPedido]
-        );
-        const pedidoId = resPedido.rows[0].id;
-
-        // 3. Registrar el detalle y descontar el stock
-        for (const item of instrumentos) {
-            const resInst = await client.query('SELECT precio FROM instrumentos WHERE id = $1', [item.instrumento_id]);
-            const precioUnitario = resInst.rows[0].precio;
-            
-            await client.query(
-                'INSERT INTO detalles_pedido (pedido_id, instrumento_id, cantidad, precio_unitario) VALUES ($1, $2, $3, $4)',
-                [pedidoId, item.instrumento_id, item.cantidad, precioUnitario]
-            );
-
-            await client.query(
-                'UPDATE instrumentos SET stock = stock - $1 WHERE id = $2',
-                [item.cantidad, item.instrumento_id]
-            );
-        }
-
-        await client.query('COMMIT');
-        res.status(201).json({ mensaje: "Pedido creado exitosamente", pedido_id: pedidoId });
-
-    } catch (error) {
-        await client.query('ROLLBACK');
-        const status = error.status || 500;
-        res.status(status).json({ error: error.message || "Error interno del servidor" });
-    } finally {
-        client.release();
+      const subItem = precioFinal * cantidad;
+      subtotal += subItem;
+      detalles.push({
+        productoId: prod.id,
+        nombre: prod.nombre,
+        precio: precioFinal,
+        cantidad,
+        subtotal: subItem
+      });
     }
+
+    const entrega = tipoEntrega === 'despacho' ? 'despacho' : 'retiro';
+    const costoDespacho = entrega === 'despacho' ? Math.round(subtotal * 0.1) : 0;
+    const estadoPago =
+      entrega === 'retiro' && metodoPago === 'Pago en efectivo en tienda'
+        ? 'Pago pendiente'
+        : 'Pago realizado';
+    const nombreCliente = `${cliente?.nombre || ''} ${cliente?.apellido || ''}`.trim() || usuarioEmail;
+    const numPedido = numeroPedido || `SV-${Date.now()}`;
+
+    const resPedido = await client.query(
+      `INSERT INTO pedidos (
+        numero_pedido, usuario_id, usuario_email, cliente_nombre, cliente_telefono,
+        tipo_entrega, direccion, metodo_pago, estado_pago, subtotal, costo_despacho, total, estado
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'En preparación')
+      RETURNING *`,
+      [
+        numPedido,
+        usuarioId,
+        usuarioEmail,
+        nombreCliente,
+        cliente?.telefono || '',
+        entrega,
+        entrega === 'despacho' ? String(direccion || '') : '',
+        metodoPago || 'Transferencia',
+        estadoPago,
+        subtotal,
+        costoDespacho,
+        subtotal + costoDespacho
+      ]
+    );
+
+    const pedidoCreado = resPedido.rows[0];
+    for (const det of detalles) {
+      await client.query(
+        `INSERT INTO detalles_pedido (pedido_id, producto_id, nombre, precio, cantidad, subtotal)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [pedidoCreado.id, det.productoId, det.nombre, det.precio, det.cantidad, det.subtotal]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json(formatearPedido(pedidoCreado, detalles));
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(error.status || 500).json({ mensaje: error.message || 'Error al crear pedido' });
+  } finally {
+    client.release();
+  }
 };
 
 const listarPedidos = async (req, res) => {
-    try {
-        // En el futuro, si el rol es CLIENTE, debes agregar: WHERE usuario_id = req.usuario.id
-        const { rows } = await pool.query('SELECT * FROM pedidos ORDER BY fecha DESC');
-        res.json(rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al listar pedidos' });
+  try {
+    const usuarioId = req.usuario.id || req.usuario.sub;
+    const query =
+      req.usuario.rol === 'ADMIN'
+        ? 'SELECT * FROM pedidos ORDER BY fecha DESC'
+        : 'SELECT * FROM pedidos WHERE usuario_id = $1 ORDER BY fecha DESC';
+    const params = req.usuario.rol === 'ADMIN' ? [] : [usuarioId];
+
+    const { rows: pedidos } = await pool.query(query, params);
+    const resultado = [];
+
+    for (const p of pedidos) {
+      const { rows: prods } = await pool.query(
+        'SELECT producto_id AS "productoId", nombre, precio, cantidad, subtotal FROM detalles_pedido WHERE pedido_id = $1',
+        [p.id]
+      );
+      resultado.push(formatearPedido(p, prods));
     }
+
+    res.json(resultado);
+  } catch {
+    res.status(500).json({ mensaje: 'Error al listar pedidos' });
+  }
 };
 
-const consultarPedido = async (req, res) => {
-    const { id } = req.params;
-    try {
-        const pedidoRes = await pool.query('SELECT * FROM pedidos WHERE id = $1', [id]);
-        if (pedidoRes.rows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
-
-        const detallesRes = await pool.query(`
-            SELECT d.cantidad, d.precio_unitario, i.nombre 
-            FROM detalles_pedido d 
-            JOIN instrumentos i ON d.instrumento_id = i.id 
-            WHERE d.pedido_id = $1
-        `, [id]);
-
-        res.json({
-            pedido: pedidoRes.rows[0],
-            detalles: detallesRes.rows
-        });
-    } catch (error) {
-        res.status(500).json({ error: 'Error al consultar el pedido' });
-    }
+const actualizarPedido = async (req, res) => {
+  const { numeroPedido } = req.params;
+  const { estado, estadoPago } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE pedidos
+       SET estado = COALESCE($1, estado),
+           estado_pago = COALESCE($2, estado_pago)
+       WHERE numero_pedido = $3 OR id::text = $3
+       RETURNING *`,
+      [estado, estadoPago, numeroPedido]
+    );
+    if (rows.length === 0) return res.status(404).json({ mensaje: 'Pedido no encontrado' });
+    res.json(formatearPedido(rows[0]));
+  } catch {
+    res.status(500).json({ mensaje: 'Error al actualizar pedido' });
+  }
 };
 
-const actualizarEstado = async (req, res) => {
-    const { id } = req.params;
-    const { estado } = req.body;
-    try {
-        const { rowCount } = await pool.query('UPDATE pedidos SET estado = $1 WHERE id = $2', [estado, id]);
-        if (rowCount === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
-        
-        res.json({ mensaje: 'Estado del pedido actualizado correctamente' });
-    } catch (error) {
-        res.status(500).json({ error: 'Error al actualizar el estado' });
-    }
-};
-
-module.exports = { crearPedido, listarPedidos, consultarPedido, actualizarEstado };
+module.exports = { crearPedido, listarPedidos, actualizarPedido };
