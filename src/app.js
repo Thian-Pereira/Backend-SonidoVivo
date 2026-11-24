@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const { swaggerUi, specs } = require('./swagger');
@@ -28,4 +29,3 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
-module.exports = app;
