@@ -79,7 +79,7 @@ Al arrancar la aplicación (`src/initDb.js`), el servidor verifica y crea autom�
 
 ## Endpoints REST y Métodos CRUD (Documentados en Swagger)
 
-La documentación interactiva completa con soporte de autenticación **Bearer JWT (`Authorize`)** está disponible en **`http://<IP_PUBLICA_EC2>:5173/api/docs`** (vía proxy) o **`http://<IP_PUBLICA_EC2>:8080/api/docs`**.
+La documentación interactiva completa con soporte de autenticación **Bearer JWT (`Authorize`)** está disponible en **`http://3.89.152.57:5173/api/docs`** (vía proxy) o **`http://3.89.152.57:8080/api/docs`**.
 
 ### 1. Autenticación (`/api/auth`)
 | Método | Endpoint | Acceso | Descripción |
